@@ -1,0 +1,5 @@
+s <- function(db, query){
+
+dbSendQuery(get(db), query) %>% dbFetch()
+
+}
