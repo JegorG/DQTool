@@ -108,7 +108,7 @@ databases <- c("Alfam", "Retail", "Non-Retail", "Sandbox", "tool_db")
   
   
         
-        tabPanel('View data', view_data_ui("view_data")),
+        tabPanel('View data', view_data_ui("view_data", databases)),
         tabPanel('Delete Data'),
         tabPanel('Download Data'),
         
@@ -117,18 +117,45 @@ databases <- c("Alfam", "Retail", "Non-Retail", "Sandbox", "tool_db")
       ),
       
                  
-                 
-                 
-                 
        # source('completeness_ui.R')$value,
         navbarMenu("Completeness", 
-                 tabPanel("Missing value analysis", missing_value_analysis_bs_ui("mva")),
+                 tabPanel("Missing value analysis", missing_value_analysis_bs_ui("mva", databases)),
                  tabPanel("Help")),
         source('accuracy_ui.R')$value,
         source('consistency_ui.R')$value,
         source('timeliness_ui.R')$value,
         source('uniqueness_ui.R')$value,
-        source('validity_ui.R')$value
+        source('validity_ui.R')$value,
+  
+  
+  nav_menu("Settings",
+           nav_panel("Data Options",
+                     bslib::accordion(accordion_panel("Set Data Globally",
+                                                      
+                                                      pickerInput("set_database",
+                                                                  choices = databases,
+                                                                  multiple = TRUE,
+                                                                  options = pickerOptions(maxOptions = 1, title = "Database")),
+                                                      
+                                                      conditionalPanel("input.set_database.length > 0",{
+                                                      
+                                                        pickerInput("set_table",
+                                                                    choices = NULL,
+                                                                    multiple = TRUE,
+                                                                    options = pickerOptions(maxOptions = 1, `live-search`=TRUE, title = "Table"))
+                                                        
+                                                      },
+                                                      
+                                                      conditionalPanel("input.set_table.length > 0", {
+                                                        
+                                                       input_task_button("set_button", "Set")
+                                                        
+                                                        
+                                                      })
+                                                                       
+                                                      )))))
+  
+  
         
         # tabPanel('Availability'),
         # tabPanel('Traceacbility'),
@@ -141,7 +168,9 @@ databases <- c("Alfam", "Retail", "Non-Retail", "Sandbox", "tool_db")
   
   
   server <- function(session, input, output){
-    thematic::thematic_shiny() 
+    
+    reactive_values <- reactiveValues()
+    
     upload_data_server("upload_data")
     view_data_server("view_data")
     missing_value_analysis_bs_server("mva")
@@ -153,12 +182,41 @@ databases <- c("Alfam", "Retail", "Non-Retail", "Sandbox", "tool_db")
     #   # dbDisconnect(tool_db)
     # })
     
+    observeEvent(input$set_database, {
+      
+      req(input$set_database)
+      
+      new_choices <- send_query("tool_db", glue("SELECT table_name FROM log_table WHERE active = 1 AND database = '{input$set_database}'")) %>% pull(table_name)
+      
+      updatePickerInput(session, "set_table", choices = new_choices)
+      
+      reactive_values$tables_available <- new_choices
+      
+    })
+    
+    observeEvent(input$set_button, {
+      
+      req(input$set_table)
+      
+      view_data_server("view_data", databases = databases, 
+                       selected_database = input$set_database,
+                       tables = reactive_values$tables_available, 
+                       selected_table = input$set_table)
+      
+      missing_value_analysis_bs_server("mva", databases = databases, 
+                       selected_database = input$set_database,
+                       tables = reactive_values$tables_available, 
+                       selected_table = input$set_table)
+      
+      
+    })
+    
   }
   
   shinyApp(ui, server)
   
   }
   
-  run_with_themer(app())
+  app()
 
   

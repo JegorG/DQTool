@@ -1,4 +1,4 @@
-  view_data_ui <- function(id) {
+  view_data_ui <- function(id, databases_input) {
     ns <- NS(id)
     page_fillable(
     tagList(page_sidebar(
@@ -19,7 +19,7 @@
         pickerInput(
           inputId = ns("database"),
           label = "Database",
-          choices = c("Alfam"),
+          choices = databases_input,
           options = list(title = "Select Database"),
           selected = "Alfam"
         ),
@@ -99,29 +99,43 @@ navset_card_underline(
     
   }
   
-  view_data_server <- function(id) {
+  view_data_server <- function(id, databases = NULL, selected_database = NULL, tables = NULL, selected_table = NULL) {
     moduleServer(id, function(input, output, session) {
+      
+      table_selected <- reactiveVal(NULL)
+      
+      observe({
+        
+        req(databases, selected_database, tables, selected_table)
+        
+        updatePickerInput(session, "database", choices = databases, selected = selected_database)
+        updatePickerInput(session, "table", choices = tables, selected = selected_table)
+        table_selected(selected_table)
+      })
         
       reactive_values <- reactiveValues()
       
   # observeEvent Database to update tables ----------------------------------
   
       
-        observeEvent(input$database, {
+        observeEvent(input$database, priority = 1, {
           
           req(input$database)
-          
-          new_choices <- 
+
+            new_choices <- 
             send_query("tool_db", glue("SELECT table_name FROM log_table WHERE active = 1 AND database = '{input$database}'")) %>% 
             pull(table_name)
           
-          req(new_choices)
-          
           updatePickerInput(session = session,
                             inputId = "table",
-                            choices = new_choices)
+                            choices = new_choices,
+                            selected = table_selected())
+          
+          if(!is.null(table_selected())) table_selected(NULL)
+
+          
         
-      }, ignoreNULL = TRUE)
+      })
       
   # observeEvent: Table to update columns -----------------------------------
   
@@ -139,9 +153,8 @@ navset_card_underline(
         
         table_info <- table_info$result
         new_choices <- table_info %>% generate_choices()
-        
         # Select columns picker
-                                  
+        
         updatePickerInput(session = session,
                           inputId = "columns",
                           choices = new_choices,

@@ -117,8 +117,9 @@ conditionalPanel(
 
 # Server to update the Table selections according to the selected Database
 
-upload_data_server <- function(id) {
+upload_data_server <- function(id, databases = NULL, selected_database = NULL) {
   moduleServer(id, function(input, output, session) {
+    
     # observeEvent: Database to update SQL tables -----------------------------
     
     

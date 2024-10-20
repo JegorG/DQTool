@@ -1,4 +1,4 @@
-missing_value_analysis_bs_ui <- function(id){
+missing_value_analysis_bs_ui <- function(id, databases_input){
   ns <- NS(id)
   tagList(useShinyjs(),
   useKeys(),
@@ -9,7 +9,7 @@ missing_value_analysis_bs_ui <- function(id){
       div(id = "Dataset_panel", 
           accordion_panel("Dataset", icon = bsicons::bs_icon("database-add"), 
                       actionButton(ns("refresh_databases"), "Refresh"), 
-                      pickerInput(ns("database_input"), "Database", choices = c("Alfam", "Retail"), multiple = FALSE,  options = list(`live-search` = TRUE, title = "Pick a dataset"), pickerOptions(maxOptions = 1)),
+                      pickerInput(ns("database_input"), "Database", choices = databases_input, multiple = FALSE,  options = list(`live-search` = TRUE, title = "Pick a dataset"), pickerOptions(maxOptions = 1)),
                       
                       conditionalPanel("input.database_input.length > 0",{
                         
@@ -101,12 +101,23 @@ missing_value_analysis_bs_ui <- function(id){
 }
 
 
-missing_value_analysis_bs_server <- function(id) {
+missing_value_analysis_bs_server <- function(id, databases = NULL, selected_database = NULL, tables = NULL, selected_table = NULL) {
   moduleServer(
     id,
     function(input, output, session) {
+      
+      table_selected <- reactiveVal(NULL)
+      
+      observe({
+        
+        req(databases, selected_database, tables, selected_table)
+        
+        updatePickerInput(session, "database_input", choices = databases, selected = selected_database)
+        updatePickerInput(session, "table_input", choices = tables, selected = selected_table)
+        table_selected(selected_table)
+        
+      })
     
-      thematic::thematic_shiny() 
       
       reactive_values <- reactiveValues()
       key_index       <- reactiveVal(1)
@@ -163,7 +174,7 @@ observeEvent(input$refresh_databases, {
 
 # data base selection to update tables ------------------------------------
 
-      observeEvent(input$database_input, {
+      observeEvent(input$database_input, priority = 1, {
 
         req(input$database_input)
 
@@ -178,7 +189,9 @@ observeEvent(input$refresh_databases, {
         updatePickerInput(session = session,
                           inputId = "table_input",
                           choices = new_choices,
-                          selected = c("df"))
+                          selected = table_selected())
+        
+        if(!is.null(table_selected())) table_selected(NULL)
 
       }, ignoreNULL = TRUE)
       
