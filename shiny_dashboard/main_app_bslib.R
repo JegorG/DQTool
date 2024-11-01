@@ -23,6 +23,8 @@
   library(shinyjs)
   library(thematic)
   library(tictoc)
+  library(esquisse)
+  library(rlang)
   
   # font_add_google("Chilanka", "chilanka")
   # showtext_auto()
@@ -37,53 +39,80 @@
 
   # plan(multisession)
 
-  # Alfam <- dbConnect(RSQLite::SQLite(), "", extended_types = TRUE)
-  # Retail <- dbConnect(RSQLite::SQLite(), "", extended_types = TRUE)
-  # tool_db <- dbConnect(RSQLite::SQLite(), "", extended_types = TRUE)
-  # 
-  # df <- fread("C:/Users/DELL/Documents/shiny_work/df.csv")
-  # dbWriteTable(Alfam, "mtcars1", mtcars)
-  # 
-  # 
-  # dbWriteTable(Alfam, "iris1", iris)
-  # dbWriteTable(Alfam, "df", df)
-  # rm(df)
-  # gc()
-  # 
-  # dbWriteTable(Retail, "mtcars2", mtcars)
-  # dbWriteTable(Retail, "iris2", iris)
-  # 
-  # dbExecute(tool_db, "DROP TABLE IF EXISTS log_table;")
-  # 
-  # dbExecute(tool_db, "CREATE TABLE log_table (
-  # 	database TEXT NOT NULL,
-  #   'table_name'    TEXT NOT NULL,
-  # 	upload_date datetime,
-  # 	deleted_date datetime,
-  # 	active INT
-  # )")
+  Alfam <- dbConnect(RSQLite::SQLite(), "", extended_types = TRUE)
+  Retail <- dbConnect(RSQLite::SQLite(), "", extended_types = TRUE)
+  tool_db <- dbConnect(RSQLite::SQLite(), "", extended_types = TRUE)
 
-  # tables_available <- dbSendQuery(tool_db, "SELECT * FROM log_table WHERE active = 1") %>% dbFetch()
-  #reactive_values <- reactiveValues()a
-  #reactive_values$tables_available <- dbSendQuery(tool_db, "SELECT * FROM log_table WHERE active = 1") %>% dbFetch()
+  df <- fread("C:/Users/DELL/Documents/shiny_work/df.csv", nrows = 1000)
+  dbWriteTable(Alfam, "mtcars1", mtcars)
 
 
-# Load Functions ----------------------------------------------------------
-  
+  dbWriteTable(Alfam, "iris1", iris)
+  dbWriteTable(Alfam, "df", df)
+  rm(df)
+  gc()
+
+  dbWriteTable(Retail, "mtcars2", mtcars)
+  dbWriteTable(Retail, "iris2", iris)
+
+  dbExecute(tool_db, "DROP TABLE IF EXISTS log_table;")
+
+  dbExecute(tool_db, "CREATE TABLE log_table (
+  	database TEXT NOT NULL,
+    'table_name'    TEXT NOT NULL,
+  	upload_date datetime,
+  	deleted_date datetime,
+  	active INT
+  )")
+# 
+#   # tables_available <- dbSendQuery(tool_db, "SELECT * FROM log_table WHERE active = 1") %>% dbFetch()
+#   #reactive_values <- reactiveValues()a
+#   #reactive_values$tables_available <- dbSendQuery(tool_db, "SELECT * FROM log_table WHERE active = 1") %>% dbFetch()
+# 
+# 
+# # Load Functions ----------------------------------------------------------
+#   
   setwd('C:/Users/DELL/Documents/shiny_work')
   map(list.files("C:/Users/DELL/Documents/DQTool/shiny_dashboard/modules", full.names = TRUE), source)
   map(list.files("C:/Users/DELL/Documents/DQTool/shiny_dashboard/functions", full.names = TRUE), source)
-  
 
 # Global objects ----------------------------------------------------------
 
 databases <- c("Alfam", "Retail", "Non-Retail", "Sandbox", "tool_db")
+
+start_theme <- bs_theme()
+  
+  # bs_add_rules(base_font    = "Nosifer",
+  #              code_font    = "Nosifer",
+  #              heading_font = "Nosifer") #|> 
+  # # accordion
+  # bs_add_rules(".accordion-title {
+  #    font-family: 'Nosifer', sans-serif;
+  #    color: red;
+  #    }") |> 
+  # bs_add_rules(".irs--shiny, .irs-min, .irs--shiny, .irs-max, .irs-single, .irs-to, .irs-from, .irs-grid-text, .js-irs-0 {
+  #     font-family: 'Nosifer', sans-serif;
+  #     color: red !important;
+  #   }")
   
   app <- function(){
   
   ui <- page_fillable(
+    theme = start_theme,
+    tags$style(HTML("
+       @import url('https://fonts.googleapis.com/css2?family=Henny+Penny&family=Nosifer&display=swap');
+       @import url('https://fonts.googleapis.com/css2?family=Nosifer&display=swap');
+       .no_gap_boxes {gap: 0rem;}
+       .no_gap_boxes > div > div:has(button) {display: flex; flex-grow: 1;}
+       button {width: 100%;}
+       .sw-input-icon {width: 75px;}
+       .no_gap {--bslib-spacer: 0rem;}
+       input[value = 'Bold'] + label {font-weight: bold;}
+       input[value = 'Italic'] + label {font-style: italic;}
+       input[value = 'Bold & Italic'] + label {font-weight: bold; font-style: italic;}
+       "
+    )),
     page_navbar(
-      theme = bs_theme(bg = "black", fg = "white"),
       title = "Data Quality pro",
       collapsible = TRUE,
      # inverse = !IS_LEGACY,
@@ -153,7 +182,9 @@ databases <- c("Alfam", "Retail", "Non-Retail", "Sandbox", "tool_db")
                                                         
                                                       })
                                                                        
-                                                      )))))
+                                                      )))),
+           nav_panel("Theme",
+                     bslib::accordion(accordion_panel("Theme Settings"))))
   
   
         
@@ -207,6 +238,15 @@ databases <- c("Alfam", "Retail", "Non-Retail", "Sandbox", "tool_db")
                        selected_database = input$set_database,
                        tables = reactive_values$tables_available, 
                        selected_table = input$set_table)
+      
+      
+    })
+    
+    output$test_plot <- renderPlot({
+      
+      ggplot(iris, aes(x = Sepal.Length, y = Sepal.Width, color = Species)) +
+        geom_point() +
+        facet_wrap(vars(Species))
       
       
     })

@@ -1,3 +1,7 @@
+
+style <- "font-size:80%; padding-top: 0; padding-bottom: 0; text-align:left"
+
+
 missing_value_analysis_bs_ui <- function(id, databases_input){
   ns <- NS(id)
   tagList(useShinyjs(),
@@ -56,8 +60,7 @@ missing_value_analysis_bs_ui <- function(id, databases_input){
                       
                       conditionalPanel("input.mode_setting == 'Sample'", {
                         
-                        sliderInput(ns("sample_rows"), min = 1000, label = "N rows to sample", max = 10000, value = 10000, step = 1000)
-                        
+                       sliderInput(ns("sample_rows"), min = 1000, label = "N rows to sample", max = 10000, value = 10000, step = 1000)
                         
                       }, ns = NS(id))
                       
@@ -81,9 +84,115 @@ missing_value_analysis_bs_ui <- function(id, databases_input){
 
 # mainPanel ---------------------------------------------------------------
 
-    
-    
-    
+    bslib::accordion(open = FALSE,
+      accordion_panel("Plot Options", icon = bs_icon("sliders2-vertical"),
+
+                      dragulaInput(
+                        inputId = NS(id, "dad1"),
+                        label = NULL,
+                        sourceLabel = NULL,
+                        targetsLabels = c("X", "Y", "Fill", "Color", "Size", "Facet"),
+                        targetsIds = c("x", "y", "fill", "color", "size", "facet"),
+                        choices = sample(LETTERS, 1200, T),
+                        replace = TRUE,
+                        copySource = TRUE,
+                        targetsHeight = "40px",
+                        width = "100%"
+                      )
+      )
+    ),
+plotOutput(NS(id, "test_plot")),
+card_footer(
+  card_body(
+     # tags$head(tags$style(HTML(".no_gap_boxes > div > div:has(button) {display: flex; flex-grow: 1;}   
+     #                               button {width: 100%}"))),
+    layout_column_wrap(
+      width = 1/5, class = "no_gap_boxes",
+      dropMenu(actionButton("labels", "Labels", icon = icon("tag"), style = style, placement = "bottom"),
+               
+                labels_input("title", id),
+                labels_input("subtitle", id),
+                labels_input("caption", id),
+                labels_input("x", id),
+                labels_input("y", id),
+                labels_input("fill", id),
+                labels_input("color", id),
+                labels_input("size", id)
+               
+               ),
+      dropMenu(actionButton("axes", "Axes", icon = icon("lines-leaning"), style = style),
+               
+               # Will need to render this on the server side depending on class
+               
+                    tags$h5("Axis limits"),
+                    numericRangeInput("x_limits", NULL, separator  = "X Axis", c(0, 1), min = 0, max =  1, step = 0.05),
+                    numericRangeInput("y_limits", NULL, separator  = "Y Axis", c(0, 1), min = 0, max =  1, step = 0.05),
+                    tags$hr(style = "margin-top: -5px; margin-bottom: 10px;"),
+                    tags$h5("Number of breaks/labels"),
+                    numericInputIcon("x_breaks", NULL, NULL, min = 0, step = 1, icon = "X Axis:"),
+                    numericInputIcon("y_breaks", NULL, NULL, min = 0, step = 1, icon = "Y Axis:"), 
+                    tags$hr(style = "margin-top: -5px; margin-bottom: 10px;"),
+                    tags$h5("Coordiates"),
+                    radioGroupButtons("coord_system", NULL, choices = c("Cartesian", "Flip", "Fixed", "Polar"), selected = "Cartesian")
+               
+               
+               
+               ),
+      dropMenu(actionButton("theme", "Theme", icon = icon("palette"), style = style),
+               
+               pickerInput("plot_theme", "Theme", choices = c()),
+               
+               radioGroupButtons(
+                 inputId = "legend_position",
+                 label = "Legend Position:",
+                 choiceNames = list(
+                   phosphoricons::ph("arrow-left", title = "Left"),
+                   phosphoricons::ph("arrow-up", title = "Top"),
+                   phosphoricons::ph("arrow-down", title = "Bottom"),
+                   phosphoricons::ph("arrow-right", title = "Right"),
+                   phosphoricons::ph("x", title = "None")
+                 ),
+                 choiceValues = c("left", "top", "bottom", "right", "none"),
+                 selected = "right",
+                 justified = TRUE,
+                 size = "sm"
+               ),
+               
+               pickerInput("family_theme_main", "Font:", choices = c("")), 
+               radioGroupButtons("family_font_weight_main", "Font Face:", choices = c("Plain", "Italic", "Bold", "Bold & Italic"), size = "sm"),
+               numericInputIcon("family_size_main", NULL, 16, 1, 48, 1, "Font size:"),
+               
+               colorPickr(
+                 inputId = "family_color_main",
+                 label = "Font color:",
+                 swatches = scales::viridis_pal()(10),
+                 opacity = TRUE
+               )
+               
+               
+               ),
+      dropMenu(actionButton("options", "Options", icon = icon("sliders"), style = style),
+               
+                        numericInputIcon("plot_width", "Plot Dimensions:",1000, 400, 1200, icon = "Width:"),
+                        tags$div(style = "margin-top: -16px;"),
+                        numericInputIcon("plot_height", NULL ,1000, 400, 1200, icon = "Height:"),
+                        tags$hr(style = "margin-top: -5px; margin-bottom: 10px;"),
+                        materialSwitch("use_plotly", "Use Plotly"), 
+                        materialSwitch("add_logo", "Add Logo"),
+                        materialSwitch("add_rag", "Add RAG lines")
+                        
+               ),
+               
+      dropMenu(actionButton("sort", "Select & Sort", icon = icon("sort"), style = style),
+               
+               pickerInput("select_column", "Select Column", choices = c()),
+               materialSwitch("order_by_rag", "Order by RAG score"),
+               materialSwitch("exclude_perfect", "Exclude columns without any missing")
+               
+               
+               )
+    ))),
+
     uiOutput(NS(id, "card_header")),
     uiOutput(NS(id, "plot_cards")),
     uiOutput(NS(id, "value_boxes"))
@@ -107,6 +216,33 @@ missing_value_analysis_bs_server <- function(id, databases = NULL, selected_data
     function(input, output, session) {
       
       table_selected <- reactiveVal(NULL)
+      reactive_values <- reactiveValues()
+      plot_input      <- reactiveValues()
+      key_index       <- reactiveVal(1)
+      
+      observe({
+        
+        legends <- c("caption", "color", "fill", "size", "subtitle", "title", "x", "y")
+        theme   <- c("plot.caption", "color", "fill", "size", "plot.subtitle", "plot.title", "axis.text.x", "axis.text.y")
+        
+        map2(legends, theme, assign_element_text_input, plot_input = plot_input, input = input)
+        
+        create_labs_args(legends, plot_input = plot_input)
+        create_theme_args(plot_input = plot_input)
+        pmap(list(map(c("color", "fill", "size"), ~plot_input[[.x]]),
+                  c("guide_colorbar", "guide_legend", "guide_legend"),
+                  c("color", "fill", "size")),
+             create_guides_args,
+             plot_input = plot_input
+                  )
+        
+        #
+        # labs
+        # theme args
+        # guides args -- need to adjust ggcall
+        # element_text, legend.title[NAME], theme, 
+      
+      })
       
       observe({
         
@@ -118,10 +254,6 @@ missing_value_analysis_bs_server <- function(id, databases = NULL, selected_data
         
       })
     
-      
-      reactive_values <- reactiveValues()
-      key_index       <- reactiveVal(1)
-      
       
       observeEvent(input$keys, {
 
@@ -154,9 +286,11 @@ missing_value_analysis_bs_server <- function(id, databases = NULL, selected_data
       
 
 # refresh button ----------------------------------------------------------
-
 observeEvent(input$refresh_databases, {
-
+  
+  # input_     <- map(names(input), ~input[[.x]])      |> setNames(names(input))
+  # plot_input_ <- map(names(plot_input), ~plot_input[[.x]]) |> setNames(names(plot_input))
+  
   output$filter_panel <- NULL
 
   databases_available <- send_query_safe("tool_db", "SELECT DISTINCT(database) AS database FROM log_table")
@@ -282,8 +416,6 @@ observeEvent(input$refresh_databases, {
       
 observeEvent(input$generate_graphs, {
   
-  debug(bs_theme_update)
-
   req(input$database_input)
   req(input$table_input)
   req(input$column_input)
@@ -322,7 +454,7 @@ observeEvent(input$generate_graphs, {
    )
 
 
-   reactive_values$plot_choices <- mva_info$plot_names
+   reactive_values$plot_choices      <- mva_info$plot_names
    reactive_values$missing_over_view <- mva_info$missing_over_view
 
    all_choices   <-  reactive_values$plot_choices
@@ -478,6 +610,14 @@ observeEvent(input$additional_plot_settings, {
 
   showModal(extra_plot_settings())
 
+})
+      
+output$test_plot <- renderPlot({
+  
+  ggplot(iris, aes(x = Sepal.Length, y = Sepal.Width, color = Species)) +
+    geom_point() +
+    facet_wrap(vars(Species))
+  
 })
       
       
